@@ -1,0 +1,256 @@
+!  Blank lines and texts afer '!' are ignored  
+!  Format:  
+!   parameter_keyword = parameter_value(s)
+!   
+!  Available parameters:
+!      - (R) - Users must specify these parameters   
+!      - (N) - Users are not required to specify these parameters. Default values will be used if not specifed.
+! 
+gravity = 9.81                        ! (N) gravity 
+rho = 1000.0                          ! (N) density
+ncor = 0                              ! (N) ncor = 0 - constant Coliolis,
+cori = 0                              ! (N) f - coriolis value
+nonlibf = 2                           ! (R) bottom friction flag: [1, 2, 3, 32, 33, 43] 
+cf = 0.02                             ! (R) manning'n value or c_{f}
+cfinfile = none                       ! (N) input file for spatialuy-varying bottom friction coefficient. none = no spatial varying cf file. See file format below. 
+deltat = 0.25                         ! (R) time step size 
+tf = 14400                     	      ! (R) Final time 
+cflnum = 1.0                          ! (N) CFL number (currently not used)      
+iadv = 1                              ! (N) include/exclude the advection term. 1[/0]-include[/exclude]
+adv_gamma = 0.0                       ! (N) intended for addition option in the discretization of advection term 
+alp_newton = 1.0                      ! (N) Pamermter in the Newton-Rapson method, 0 < alp_newto < 1 (1.0 = Newton Rapson)   
+params_newton = 20 1000 1.0e-8 1.0e-8 ! (N) stoping cretietra: max outer loop, max inner loop, stop tol outer, stop tol inner
+linear_solver = bicgstab              ! (N) name of linear solver used in the newton method's inner loop: bicgstab, gmres(20), tfqmr, pcg (recommend bicgstab)
+swetype = 2                           ! (R) Form of the momentum equations to be solved: 2- non conservative, 3 - conservative, 4 - averaged swe  
+adv_scheme = 2                        ! (N) Scheme employed in discrettizing the advection term for SWE_type = 2. adv_scheme = 1 - upwind (default), adv_scheme = 2 - Stelling's approach for advection
+elev_edmthd = 1                       ! (N) Approach used in defining the surface elevation at cell's edges 
+imthd_hedge_momen = 1                 ! (N) Approach used in defining total water depth along cell's edgess. Not applicable to every solver. 
+wetdry_scheme = 10                    ! (R) Subgrid wet/dry. 10 - Casulli (currently, it is the only option available)
+h0_edge_dry = 1.0e-9                  ! (N) threshold for dry edge 
+h0_cell_dry = 1.0e-12                 ! (N) thershold for empty cell
+time_scheme = 10                      ! (R) Time discretization scheme: 10 - Euler-backward (currently, it is an only available option)
+bctype = 1 1 10 10                    ! (R) Boundary condition on the E-, W-, S-, N-edge, respectively (see below)
+ics = 1                               ! (N) user-input initial condition, ics = 0 (default, zero, zero velocity as initial condition) ics = 1 need zeta0.ic, uvel0.ic, vvel0.ic (see format below)
+elevpost = 1                          ! (N) Post proprocessing. 1[/0]. 
+out_elev = 2 0.0 14400 250 Eta.nc         ! (R) Global elevation output. OUTGE, START, STOP, NSTEP   
+out_vel =  2 0.0 14400 250 Qx.nc Qy.nc    ! (R) Globel velocity output.  OUTVE, START, STOP, NSETP
+out_elev_station = 0 0.0 0.0 1 Eta_sta.nc ! (R) Station elevation output (not yet implemented)
+out_vel_station = 0 0.0 0.0 1 uv_sta.nc   ! (R) Station velocity output  (not yet implemented)
+
+! 
+! NOTE: 
+!
+!   
+!  1. This solver solves the SWE equations with the memomentum written either in 
+!  the non-conservative form or conservative form. The unknown variables are 
+!  the primitive variable, \eta, u, v regardless of the form. 
+!
+!  Governing equations:
+!
+!  Continuity:
+!    d \eta/dt + d(uH)/dx + d(vH)/dy = 0 
+! 
+!  Momentum: 
+!
+!    - non-conservative form
+!       H du/dt + H u du/dx + H v du/dy = -g H d\eta/dx - \gamma u + fHv
+!       H dv/dt + H v du/dx + H v dv/dy = -g H d\eta/dy - \gamma v + fHu
+!
+!    - conservative form
+!       H du/dt + u dH/dt + d(uuH)/dx + d(uvH)/dy = -g H d\eta/dx - \gamma u + fHv
+!       H dv/dt + v dH/dt + d(uvH)/dx + d(vvH)/dy = -g H d\eta/dy - \gamma v + fHu
+!
+
+!
+!  2. Default values for optional parameters
+!
+gravity = 9.81                       
+rho = 1000.0                         
+cori = 0                             
+cfinfile = none                      
+cflnum = 1.0                         
+iadv = 1                             
+adv_gamma = 0.0                      
+alp_newton = 1.0                     
+params_newton = 20 1000 1.0e-8 1.0e-8
+adv_scheme =  1                      
+elev_edmthd = 1                      
+imthd_hedge_momen = 1                
+h0_edge_dry = 1.0e-9                 
+h0_cell_dry = 1.0e-12                
+ics = 1                      
+elevpost = 1         
+
+!  'swetype' - available options:
+!    2 (adv_scheme = 1) - FV/FDcontinuity, non-conservative momentum equations.
+!    2 (adv_scheme = 2) - FV/FDcontinuity, conservative momentum equations.               
+!    3 - FV/FV, continuity, conservative momentum equations, 
+!               primitive variables (eta,u,v) as the unknown variables       
+!    4 - AVG SWE, adv_scheme = 1 (default) - quasi non-conservative momentum equations
+!    4 - AVG SWE, adv_scheme = 2           - quasi conservative momentum equations
+! 
+!  'bctype' - available options:
+!    1  - time-dependent elevation boundary. fort.1111 is required.
+!    21 - time-dependent fluxes boundary. fort.2111 is required. 
+!    10 - land boundary u.n = 0. No additional file is required.  
+! 
+!  'ics' - available options:
+!    0   -  zero elevation and velocities as intial conditions.
+!    1   -  user-defined initial condition. Initial-condtion file zeta0.ic, uvel0.ic, vvel0.ic are required. 
+! 
+!  'nonlibf' - available options:
+!    0 -- linear bottom friction tau = c*cf*u
+!    1 -- quadratic bottom friction tau  =  c*cf*|u|u, c = 1 -- FD/FV, AVG-SWE, c = dx*dy -- FV/FV  
+!    2 -- Manninng'n formula, tau = c(gn^{2}/H^{1/3})*|u|u, c = 1 -- FD/FV, c = dx*dy -- FV/FV, c = 1 -- AVG-SWE 
+!    32 -- Edge-based Volp's formula (FD/FV), tau = C_{f} |u|u, C_{f} = V/(H_{f}|K|)
+!    3 --  Averged edge-based Manning's formula, tau = c 1/4( c_{f,N} + c_{f,S} + 
+!          c_{f,E} + c_{f,N} ), c = 1 -- FD/FV, c = dxdy -- FV/FV
+!    4 -- Manning'n formula (FV/FV)
+!    33 -- Volume-based Volp's formula (FD/FV,AVG-SWE), tau = C_{f} |u|u, C_{f} = V/(H_{f}|K|), H_{f} = (\int H sqrt(H/c_{f}) dx/V)^{2}, Manning c_{f} = gn^{2}/H^{1/3}
+!    43 -- Volp's formula (FV/FV), tau = C_{f}|u|u, C_{f} = V/H_{f}, H_{f} = (\int H sqrt(H/c_{f}) dx/V)^{2}, Manning c_{f} = gn^{2}/H^{1/3}
+!    31 -- Similar to nonlibf = 33. Quadractic bottom friction with given c_{f}.
+!    41 -- Similar to nonlibf = 43. Quadractic bottom friction with given c_{f}.
+!
+!  'wetdry_scheme' - available options:
+!    10 - Casulii's subgrd wetting/drying algorithm
+!
+!  'time_scheme' - available options:
+!    10 - Semi-implict Euler backward scheme
+!
+
+! 
+!--------------------------------------------
+!--------------------------------------------
+!
+! Initial condition file format:
+! zeta0.ic:
+!    
+!  TITLE
+!  N1 N2  ! N1 = NX, N2 = NY
+!  for i = 1 to N1
+!    for j = 1 to N2
+!       ZETA(J,I)
+!    end
+!  end  
+!
+! uvel0.ic:
+! TITLE 
+! N1 N2  ! N1 = NX + 1, N2 = NY
+! for i = 1 to N1
+!  for j = 1 to N2
+!     U(J,I)
+!  end
+! end
+!
+! vvel0.ic:
+! TITLE 
+! N1 N2  ! N1 = NX + 1, N2 = NY
+! for i = 1 to N1
+!  for j = 1 to N2
+!     U(J,I)
+!  end
+! end
+
+!--------------------------------------------
+!--------------------------------------------
+!
+! Boundary condition file format:
+!
+! fort.1111:
+!
+!  TITLE
+!  I1 I2 I3 I4
+!  NSNAP N1 N2 ! N1 = NX, N2 = NY
+!  DT
+!  for ISNAP = 1 to NSNAP
+!    ISNAP
+!    if ( I1 > 0 ) 
+!        for i = 1, N2
+!          EAST_EVAL(I)
+!        end
+!    end
+!    if ( I2 > 0 ) 
+!        for i = 1, N2
+!          WEST_EVAL(I)
+!        end
+!    end
+!    if ( I3 > 0 ) 
+!        for i = 1, N2
+!          SOUTH_EVAL(I)
+!        end
+!    end
+!    if ( I1 > 0 ) 
+!        for i = 1, N2
+!          NORTH_EVAL(I)
+!        end
+!    end
+!  end 
+!
+!  fort.2111:
+!  TITLE 
+!  I1 I2 I3 I4
+!  NSNAP N1 N2 ! N1 = NX, N2 = NY
+!  DT
+!  for ISNAP = 1 to NSNAP
+!    ISNAP
+!    if ( I1 > 0 ) 
+!        for i = 1, N2
+!          EAST_FLUX_VAL(I)
+!        end
+!    end
+!    if ( I2 > 0 ) 
+!        for i = 1, N2
+!          WEST_FLUX_VAL(I)
+!        end
+!    end
+!    if ( I3 > 0 ) 
+!        for i = 1, N2
+!          SOUTH_FLUX_VAL(I)
+!        end
+!    end
+!    if ( I1 > 0 ) 
+!        for i = 1, N2
+!          NORTH_FLUX_VAL(I)
+!        end
+!    end
+!  end 
+
+!
+!--------------------------------------------
+!--------------------------------------------
+! cfinfile:  user input file listing spatial-vary bottom friction coeficients
+! 
+! TITLE 
+!
+! INPUT_TYPE ! 'uv-grid' or 'subgrid'
+!
+! if ( INPUT_TYPE = 'uv-grid' ) ! grid level cf
+!   ! list cf at u-node in the compressed format
+!   DEFVAL_CF  ! u-node default cf
+!   N1 N2 NNZ ! N1 = NX + 1, N2 = NY, NNZ no of u-node points with cf other than DEFVAL_CF
+!   for ii = 1 to NNZ
+!     I, J, CF_U_VAL(J,I)
+!   end
+!
+!   ! list cf at u-node in the compressed format
+!   DEFVAL_CF  ! v-node default cf
+!   N1 N2 NNZ ! N1 = NX, N2 = NY + 1, NNZ no of u-node points with cf other than DEFVAL_CF
+!   for ii = 1 to NNZ
+!     I, J, CF_V_VAL(J,I)
+!   end
+! end
+!
+! if ( INPUT_TYPE = 'subgrid' ) ! cell-center and subgrid cf  
+!   CF_DEF ! cell-centered cf value
+!   N1 N2 GNNZ ! N1 = NX, N2 = NY, GNNZ = no. of cells with cf other than CF_DEF
+!   for ii = 1 to GNNZ
+!      I, J
+!      CF_CELL_DEF
+!      M1 M2 SNNZ
+!      for jj = 1 to NNZ
+!         I1 I2 SUBGRID_CF_VAL(I2,I1) 
+!      end
+!   end
+!  end
+!
+!
